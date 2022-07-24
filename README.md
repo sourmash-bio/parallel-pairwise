@@ -6,7 +6,7 @@ Attempt to brute-force sourmash signatures pairwise comparisons. Result is writt
 ```bash
 cmake -Bbuild -DCMAKE_BUILD_TYPE=RELEASE
 cmake --build build -j 4
-# ./build/pairwise <sigs_directory> <kSize> <threads> <output>"
+# ./build/pairwise <sigs_directory> <threads> <kSize> <output>"
 ```
 
 ## Clustering
@@ -23,5 +23,7 @@ python cluster_it.py --csv CSV --cutoff CUTOFF --output OUTPUT
 
 
 ## Example:
+```bash
 ./build/pairwise test_data 16 51 pairwise_test_data
 python cluster_it.py --csv pairwise_test_data.csv --cutoff 10 --output clusters_test_data.txt
+```
