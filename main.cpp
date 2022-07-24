@@ -118,13 +118,14 @@ std::vector<std::string> glob2(const std::string& pattern) {
 
 int main(int argc, char** argv) {
 
-    if (argc != 4) {
-        cout << "run: ./pairwise <sigs_directory> <threads> <output>" << endl;
+    if (argc != 5) {
+        cout << "run: ./pairwise <sigs_directory> <threads> <kSize> <output>" << endl;
         exit(1);
     }
     string sigs_dir = argv[1];
     int threads = stoi(argv[2]);
-    string output = argv[3];
+    int kSize = stoi(argv[3]);
+    string output = argv[4];
 
 
     // 1. Scan all sigs in a directory
@@ -172,7 +173,7 @@ int main(int argc, char** argv) {
             for (int i = 0; i < number_of_sub_sigs; i++) {
                 int current_kSize = sig[0]["signatures"][i]["ksize"].as<int>();
                 auto loaded_sig_it = sig[0]["signatures"][i]["mins"].as_array().begin();
-                if (current_kSize == KSIZE) {
+                if (current_kSize == kSize) {
                     while (loaded_sig_it != sig[0]["signatures"][i]["mins"].as_array().end()) {
                         tmp_hashes.insert(loaded_sig_it->as<uint64_t>());
                         loaded_sig_it++;
