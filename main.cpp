@@ -155,7 +155,7 @@ int main(int argc, char** argv) {
     int thread_num, num_threads, start, end, vec_i;
     int n = total_sigs_number;
     omp_set_num_threads(threads);
-    clock_t begin_time = clock();
+    auto begin_time = Time::now();
 #pragma omp parallel private(vec_i,thread_num,num_threads,start,end)
     {
         thread_num = omp_get_thread_num();
@@ -183,12 +183,12 @@ int main(int argc, char** argv) {
             sig_to_hashes.insert(pair(sig_names[vec_i], tmp_hashes));
         }
     }
-    cout << "Loaded all signatures in " << float(clock() - begin_time) / CLOCKS_PER_SEC << " secs" << endl; //time
+    cout << "Loaded all signatures in " << std::chrono::duration<double, std::milli>(Time::now() - begin_time).count() / 1000 << " secs" << endl;
     cout << "Performing pairwise comparisons using " << threads << " cores ..." << endl;
     Combo combo = Combo();
     combo.combinations(total_sigs_number);
     PAIRWISE_MAP pairwise_hashtable;
-    begin_time = clock();
+    begin_time = Time::now();
 
     int thread_num_1, num_threads_1, start_1, end_1, vec_i_1;
     int n_1 = combo.combs.size();
@@ -216,8 +216,8 @@ int main(int argc, char** argv) {
             pairwise_hashtable.insert(pair(pair(sig_1_idx, sig_2_idx), max_containment));
         }
     }
-    cout << "Pairwise comparisons done in " << float(clock() - begin_time) / CLOCKS_PER_SEC << " secs" << endl; //time
 
+    cout << "Pairwise comparisons done in " << std::chrono::duration<double, std::milli>(Time::now() - begin_time).count() / 1000 << " secs" << endl;
     cout << "writing pairwise matrix to" << output << ".csv" << endl;
 
     std::ofstream myfile;
