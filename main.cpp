@@ -11,7 +11,6 @@
 #include "RSJparser.tcc"
 #include <glob.h>
 #include <string>
-#include "tqdm.h"
 #include "progressbar.hpp"
 #include <stdexcept>
 
