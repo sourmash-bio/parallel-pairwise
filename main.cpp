@@ -148,7 +148,7 @@ int main(int argc, char** argv) {
         total_sigs_number++;
     }
 
-    cout << "[i] Loading " << total_sigs_number << " sigs using " << SIGS_LOAD_THREADS << " cores..." << endl;
+    cout << "[i] Loading " << total_sigs_number << " sigs using " << threads << " cores..." << endl;
 
     // 2. Load all sigs in parallel
     SIGS_MAP sig_to_hashes;
@@ -184,7 +184,7 @@ int main(int argc, char** argv) {
         }
     }
     cout << "Loaded all signatures in " << float(clock() - begin_time) / CLOCKS_PER_SEC << " secs" << endl; //time
-    cout << "Performing pairwise comparisons using " << PAIRWISE_THREADS << " cores ..." << endl;
+    cout << "Performing pairwise comparisons using " << threads << " cores ..." << endl;
     Combo combo = Combo();
     combo.combinations(total_sigs_number);
     PAIRWISE_MAP pairwise_hashtable;
