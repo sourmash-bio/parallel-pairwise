@@ -11,6 +11,8 @@
 #include "RSJparser.tcc"
 #include <glob.h>
 #include <string>
+#include "tqdm.h"
+#include "progressbar.hpp"
 #include <stdexcept>
 
 using boost::adaptors::transformed;
@@ -149,50 +151,42 @@ int main(int argc, char** argv) {
         total_sigs_number++;
     }
 
-    cout << "[i] Loading " << total_sigs_number << " sigs using " << threads << " cores..." << endl;
-
     // 2. Load all sigs in parallel
+    cout << "Loading signatures ..." << endl;
     SIGS_MAP sig_to_hashes;
-    int thread_num, num_threads, start, end, vec_i;
-    int n = total_sigs_number;
-    omp_set_num_threads(threads);
     auto begin_time = Time::now();
-#pragma omp parallel private(vec_i,thread_num,num_threads,start,end)
-    {
-        thread_num = omp_get_thread_num();
-        num_threads = omp_get_num_threads();
-        start = thread_num * n / num_threads;
-        end = (thread_num + 1) * n / num_threads;
-
-        for (vec_i = start; vec_i != end; ++vec_i) {
-            flat_hash_set<uint64_t> tmp_hashes;
-            auto sig_path = sigs_paths[vec_i];
-            std::ifstream sig_stream(sig_path);
-            JSON sig(sig_stream);
-            int number_of_sub_sigs = sig[0]["signatures"].size();
-            for (int i = 0; i < number_of_sub_sigs; i++) {
-                int current_kSize = sig[0]["signatures"][i]["ksize"].as<int>();
-                auto loaded_sig_it = sig[0]["signatures"][i]["mins"].as_array().begin();
-                if (current_kSize == kSize) {
-                    while (loaded_sig_it != sig[0]["signatures"][i]["mins"].as_array().end()) {
-                        tmp_hashes.insert(loaded_sig_it->as<uint64_t>());
-                        loaded_sig_it++;
-                    }
-                    break;
+    int sigIdx = 0;
+    int N = sigs_paths.size();
+    progressbar bar(N);
+    for (auto& sig_path : sigs_paths) {
+        ++sigIdx;
+        flat_hash_set<uint64_t> tmp_hashes;
+        std::ifstream sig_stream(sig_path);
+        JSON sig(sig_stream);
+        int number_of_sub_sigs = sig[0]["signatures"].size();
+        for (int i = 0; i < number_of_sub_sigs; i++) {
+            int current_kSize = sig[0]["signatures"][i]["ksize"].as<int>();
+            auto loaded_sig_it = sig[0]["signatures"][i]["mins"].as_array().begin();
+            if (current_kSize == kSize) {
+                while (loaded_sig_it != sig[0]["signatures"][i]["mins"].as_array().end()) {
+                    tmp_hashes.insert(loaded_sig_it->as<uint64_t>());
+                    loaded_sig_it++;
                 }
+                break;
             }
-            sig_to_hashes.insert(pair(sig_names[vec_i], tmp_hashes));
         }
+        sig_to_hashes.insert(pair(sig_names[sigIdx], tmp_hashes));
+        bar.update();
     }
+    cout << endl;
     cout << "Loaded all signatures in " << std::chrono::duration<double, std::milli>(Time::now() - begin_time).count() / 1000 << " secs" << endl;
-    cout << "Performing pairwise comparisons using " << threads << " cores ..." << endl;
     Combo combo = Combo();
     combo.combinations(total_sigs_number);
     PAIRWISE_MAP pairwise_hashtable;
     begin_time = Time::now();
-
     int thread_num_1, num_threads_1, start_1, end_1, vec_i_1;
     int n_1 = combo.combs.size();
+    cout << "Performing " << n_1 * n_1 << " pairwise comparisons using " << threads << " cores ..." << endl;
     omp_set_num_threads(threads);
 
 #pragma omp parallel private(vec_i_1,thread_num_1,num_threads_1,start_1,end_1)
@@ -203,7 +197,7 @@ int main(int argc, char** argv) {
         start_1 = thread_num_1 * n_1 / num_threads_1;
         end_1 = (thread_num_1 + 1) * n_1 / num_threads_1;
 
-        for (vec_i = start_1; vec_i_1 != end_1; ++vec_i_1) {
+        for (vec_i_1 = start_1; vec_i_1 != end_1; ++vec_i_1) {
             auto const& seq_pair = combo.combs[vec_i_1];
             uint32_t sig_1_idx = seq_pair.first;
             uint32_t sig_2_idx = seq_pair.second;
@@ -217,9 +211,8 @@ int main(int argc, char** argv) {
             pairwise_hashtable.insert(pair(pair(sig_1_idx, sig_2_idx), max_containment));
         }
     }
-
     cout << "Pairwise comparisons done in " << std::chrono::duration<double, std::milli>(Time::now() - begin_time).count() / 1000 << " secs" << endl;
-    cout << "writing pairwise matrix to" << output << ".csv" << endl;
+    cout << "writing pairwise matrix to " << output << endl;
 
     std::ofstream myfile;
     myfile.open(output + ".csv");
