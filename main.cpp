@@ -11,7 +11,6 @@
 #include "RSJparser.tcc"
 #include <glob.h>
 #include <string>
-#include "progressbar.hpp"
 #include <stdexcept>
 
 using boost::adaptors::transformed;
@@ -156,9 +155,9 @@ int main(int argc, char** argv) {
     auto begin_time = Time::now();
     int sigIdx = 0;
     int N = sigs_paths.size();
-    progressbar bar(N);
     for (auto& sig_path : sigs_paths) {
         ++sigIdx;
+        cout << "\r" << "loading " << sigIdx << "/" << N;
         flat_hash_set<uint64_t> tmp_hashes;
         std::ifstream sig_stream(sig_path);
         JSON sig(sig_stream);
@@ -175,7 +174,6 @@ int main(int argc, char** argv) {
             }
         }
         sig_to_hashes.insert(pair(sig_names[sigIdx], tmp_hashes));
-        bar.update();
     }
     cout << endl;
     cout << "Loaded all signatures in " << std::chrono::duration<double, std::milli>(Time::now() - begin_time).count() / 1000 << " secs" << endl;
