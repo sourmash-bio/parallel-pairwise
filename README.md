@@ -1,6 +1,6 @@
 # parallel-pairwise
 
-Attempt to brute-force sourmash signatures pairwise comparisons. Result in written in a csv files.
+Attempt to brute-force sourmash signatures pairwise comparisons. Result is written in a csv files.
 
 ## Build
 ```bash
