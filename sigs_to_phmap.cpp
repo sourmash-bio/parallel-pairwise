@@ -134,6 +134,7 @@ int main(int argc, char** argv) {
 
 
     for (int j = 0; j < sigs_paths.size(); j++) {
+        cout << "\r" << "loading " << chunk_count + 1 << "/" << chunk;
         string& sig_path = sigs_paths[j];
         std::ifstream sig_stream(sig_path);
         JSON sig(sig_stream);
@@ -168,7 +169,7 @@ int main(int argc, char** argv) {
             }
         }
         chunk_count = 0;
-        cout << "processed " << ++done_chunks << "/" << (int)(sig_names.size() / chunk) << "..." << endl;
+        cout << "\nprocessed " << ++done_chunks << "/" << (int)(sig_names.size() / chunk) << " chunks..." << endl;
         json_map.clear();
     }
 
