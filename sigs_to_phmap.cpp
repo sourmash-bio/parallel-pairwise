@@ -83,14 +83,15 @@ std::vector<std::string> glob2(const std::string& pattern) {
 
 int main(int argc, char** argv) {
 
-    if (argc != 5) {
-        cout << "run: ./pairwise <sigs_directory> <kSize> <output_dir> <threads>" << endl;
+    if (argc != 6) {
+        cout << "run: ./pairwise <sigs_directory> <kSize> <output_dir> <threads> <chunks>" << endl;
         exit(1);
     }
     string sigs_dir = argv[1];
     int kSize = stoi(argv[2]);
     string output_dir = argv[3];
     int user_threads = stoi(argv[4]);
+    int user_chunks = stoi(argv[5]);
 
     string cmd = "mkdir -p " + output_dir;
 
@@ -125,7 +126,11 @@ int main(int argc, char** argv) {
 
 
     vector<tuple<string, JSON>> json_map;
-    int chunk = (int)(sig_names.size() / 10);
+    int chunk =  user_chunks;
+    if (user_chunks > sig_names.size()){
+        cout << "chunk size set to " << sig_names.size();
+        chunk = sig_names.size();
+    }
     cout << "chunk size: " << chunk << endl;
     int chunk_count = 0;
     int done_chunks = 0;
