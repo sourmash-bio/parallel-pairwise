@@ -83,13 +83,14 @@ std::vector<std::string> glob2(const std::string& pattern) {
 
 int main(int argc, char** argv) {
 
-    if (argc != 4) {
-        cout << "run: ./pairwise <sigs_directory> <kSize> <output_dir>" << endl;
+    if (argc != 5) {
+        cout << "run: ./pairwise <sigs_directory> <kSize> <output_dir> <threads>" << endl;
         exit(1);
     }
     string sigs_dir = argv[1];
     int kSize = stoi(argv[2]);
     string output_dir = argv[3];
+    int user_threads = stoi(argv[4]);
 
     string cmd = "mkdir -p " + output_dir;
 
@@ -122,36 +123,79 @@ int main(int argc, char** argv) {
         total_sigs_number++;
     }
 
-    // 2. Load all sigs in parallel
-    cout << "Loading signatures ..." << endl;
+
+    vector<tuple<string, JSON>> json_map;
+    int chunk = (int)(sig_names.size() / 10);
+    cout << "chunk size: " << chunk << endl;
+    int chunk_count = 0;
+    int done_chunks = 0;
+    cout << "load without parsing" << endl;
     auto begin_time = Time::now();
-    int sigIdx = 0;
-    int N = sigs_paths.size();
-    for (auto& sig_path : sigs_paths) {
-        cout << "\r" << "loading " << sigIdx + 1 << "/" << N;
-        phmap::flat_hash_set<uint64_t> tmp_hashes;
+
+
+    for (int j = 0; j < sigs_paths.size(); j++) {
+        string& sig_path = sigs_paths[j];
         std::ifstream sig_stream(sig_path);
         JSON sig(sig_stream);
-        int number_of_sub_sigs = sig[0]["signatures"].size();
-        for (int i = 0; i < number_of_sub_sigs; i++) {
-            int current_kSize = sig[0]["signatures"][i]["ksize"].as<int>();
-            auto loaded_sig_it = sig[0]["signatures"][i]["mins"].as_array().begin();
-            if (current_kSize == kSize) {
-                while (loaded_sig_it != sig[0]["signatures"][i]["mins"].as_array().end()) {
-                    tmp_hashes.insert(loaded_sig_it->as<uint64_t>());
-                    loaded_sig_it++;
+        json_map.push_back(make_tuple(sig_names[j], sig));
+        chunk_count++;
+
+        if (chunk_count < chunk) continue;
+
+#pragma omp parallel num_threads(user_threads)
+        {
+#pragma omp for
+            for (int m = 0; m < chunk; m++) {
+                auto& _pair = json_map[m];
+                auto& sig_name = get<0>(_pair);
+                JSON& sig = get<1>(_pair);
+                phmap::flat_hash_set<uint64_t> tmp_hashes;
+                int number_of_sub_sigs = sig[0]["signatures"].size();
+                for (int i = 0; i < number_of_sub_sigs; i++) {
+                    int current_kSize = sig[0]["signatures"][i]["ksize"].as<int>();
+                    auto loaded_sig_it = sig[0]["signatures"][i]["mins"].as_array().begin();
+                    if (current_kSize == kSize) {
+                        while (loaded_sig_it != sig[0]["signatures"][i]["mins"].as_array().end()) {
+                            tmp_hashes.insert(loaded_sig_it->as<uint64_t>());
+                            loaded_sig_it++;
+                        }
+                        break;
+                    }
                 }
-                break;
+                string out_path = output_dir + "/" + sig_name + ".bin";
+                phmap::BinaryOutputArchive ar_out(out_path.c_str());
+                tmp_hashes.phmap_dump(ar_out);
             }
         }
-        string out_path = output_dir + "/" + sig_names[sigIdx] + ".bin";
-        phmap::BinaryOutputArchive ar_out(out_path.c_str());
-        tmp_hashes.phmap_dump(ar_out);
-        sigIdx++;
+        chunk_count = 0;
+        cout << "processed " << ++done_chunks << "/" << (int)(sig_names.size() / chunk) << "..." << endl;
+        json_map.clear();
     }
+
+    if (chunk_count) {
+        for (auto& _pair : json_map) {
+            auto& sig_name = get<0>(_pair);
+            JSON& sig = get<1>(_pair);
+            phmap::flat_hash_set<uint64_t> tmp_hashes;
+            int number_of_sub_sigs = sig[0]["signatures"].size();
+            for (int i = 0; i < number_of_sub_sigs; i++) {
+                int current_kSize = sig[0]["signatures"][i]["ksize"].as<int>();
+                auto loaded_sig_it = sig[0]["signatures"][i]["mins"].as_array().begin();
+                if (current_kSize == kSize) {
+                    while (loaded_sig_it != sig[0]["signatures"][i]["mins"].as_array().end()) {
+                        tmp_hashes.insert(loaded_sig_it->as<uint64_t>());
+                        loaded_sig_it++;
+                    }
+                    break;
+                }
+            }
+            string out_path = output_dir + "/" + sig_name + ".bin";
+            phmap::BinaryOutputArchive ar_out(out_path.c_str());
+            tmp_hashes.phmap_dump(ar_out);
+        }
+    }
+
     cout << endl;
     cout << "Loaded all signatures in " << std::chrono::duration<double, std::milli>(Time::now() - begin_time).count() / 1000 << " secs" << endl;
-    cout << "serializing the phmap ..." << endl;
-    begin_time = Time::now();
-    cout << "Serialized the phmap in " << std::chrono::duration<double, std::milli>(Time::now() - begin_time).count() / 1000 << " secs" << endl;
+
 }
