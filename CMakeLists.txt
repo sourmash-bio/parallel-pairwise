@@ -17,6 +17,8 @@ set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -lstdc++fs -fPIC -lgomp -lrt
 include_directories("${PROJECT_SOURCE_DIR}/include")
 include_directories("${PROJECT_SOURCE_DIR}/lib/progressbar/include")
 include_directories("${PROJECT_SOURCE_DIR}/lib/json_parser")
+include_directories("${PROJECT_SOURCE_DIR}/lib/progressbar/include")
+
 add_subdirectory("lib/zstr")
 include_directories("${PROJECT_SOURCE_DIR}/lib/zstr/src")
 
@@ -28,3 +30,9 @@ target_link_libraries(pairwise z)
 
 add_executable(sigs_to_phmap sigs_to_phmap.cpp)
 target_link_libraries(sigs_to_phmap z)
+
+add_executable(sig_to_bin sig_to_bin.cpp)
+target_link_libraries(sig_to_bin z)
+
+add_executable(validate validate.cpp)
+target_link_libraries(validate z)

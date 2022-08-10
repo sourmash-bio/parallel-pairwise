@@ -13,6 +13,7 @@
 #include <stdexcept>
 #include "cpp_json.h"
 #include "zstr.hpp"
+#include "progressbar.hpp"
 
 using boost::adaptors::transformed;
 using boost::algorithm::join;
@@ -79,6 +80,7 @@ int main(int argc, char** argv) {
     int threads = stoi(argv[2]);
     int kSize = stoi(argv[3]);
     string output = argv[4];
+    int loading_cores = (int)threads * 0.5;
 
 
     // 1. Scan all sigs in a directory
@@ -103,33 +105,48 @@ int main(int argc, char** argv) {
     }
 
     // 2. Load all sigs in parallel
-    cout << "Loading signatures ..." << endl;
+    cout << "Loading signatures using " << loading_cores << " cores..." << endl;
+
     SIGS_MAP sig_to_hashes;
     auto begin_time = Time::now();
     int sigIdx = 0;
     int N = sigs_paths.size();
-    for (auto& sig_path : sigs_paths) {
-        ++sigIdx;
-        cout << "\r" << "loading " << sigIdx << "/" << N;
-        flat_hash_set<uint64_t> tmp_hashes;
-        zstr::ifstream sig_stream(sig_path);
-        json::value json = json::parse(sig_stream);
-        auto sourmash_sig = json[0]["signatures"];
-        const json::array& sig_array = as_array(sourmash_sig);
-        for (auto it = sig_array.begin(); it != sig_array.end(); ++it) {
-            const json::value& v = *it;
-            if (v["ksize"] == kSize) {
-                const json::array& mins = as_array(v["mins"]);
-                auto mins_it = mins.begin();
-                while (mins_it != mins.end()) {
-                    tmp_hashes.insert(json::to_number<uint64_t>(*mins_it));
-                    mins_it++;
+    // Loading all bins
+    progressbar bar(sigs_paths.size());
+    bar.set_todo_char(" ");
+    bar.set_done_char("█");
+    bar.set_opening_bracket_char("{");
+    bar.set_closing_bracket_char("}");
+#pragma omp parallel num_threads(loading_cores)
+    {
+#pragma omp for
+        for (int l = 0; l < sigs_paths.size(); l++) {
+            auto& sig_path = sigs_paths[l];
+            ++sigIdx;
+            cout << "\r" << "loading " << sigIdx << "/" << N;
+            flat_hash_set<uint64_t> tmp_hashes;
+            zstr::ifstream sig_stream(sig_path);
+            json::value json = json::parse(sig_stream);
+            auto sourmash_sig = json[0]["signatures"];
+            const json::array& sig_array = as_array(sourmash_sig);
+            for (auto it = sig_array.begin(); it != sig_array.end(); ++it) {
+                const json::value& v = *it;
+                if (v["ksize"] == kSize) {
+                    const json::array& mins = as_array(v["mins"]);
+                    auto mins_it = mins.begin();
+                    while (mins_it != mins.end()) {
+                        tmp_hashes.insert(json::to_number<uint64_t>(*mins_it));
+                        mins_it++;
+                    }
                 }
+                break;
             }
-            break;
+            sig_to_hashes.insert(pair(sig_names[sigIdx], tmp_hashes));
+#pragma omp critical
+            bar.update();
         }
-        sig_to_hashes.insert(pair(sig_names[sigIdx], tmp_hashes));
     }
+
     cout << endl;
     cout << "Loaded all signatures in " << std::chrono::duration<double, std::milli>(Time::now() - begin_time).count() / 1000 << " secs" << endl;
     Combo combo = Combo();
@@ -153,14 +170,11 @@ int main(int argc, char** argv) {
             auto const& seq_pair = combo.combs[vec_i_1];
             uint32_t sig_1_idx = seq_pair.first;
             uint32_t sig_2_idx = seq_pair.second;
-            auto sig_1_size = sig_to_hashes[sig_names[sig_1_idx]].size();
-            auto sig_2_size = sig_to_hashes[sig_names[sig_2_idx]].size();
             auto& sig1_hashes = sig_to_hashes[sig_names[sig_1_idx]];
             auto& sig2_hashes = sig_to_hashes[sig_names[sig_2_idx]];
             uint64_t shared_hashes = count_if(sig1_hashes.begin(), sig1_hashes.end(), [&](uint64_t k) {return sig2_hashes.find(k) != sig2_hashes.end();});
             if (!shared_hashes) continue;
-            float max_containment = (float)shared_hashes / std::min(sig_1_size, sig_2_size);
-            pairwise_hashtable.insert(pair(pair(sig_1_idx, sig_2_idx), max_containment));
+            pairwise_hashtable.insert(pair(pair(sig_1_idx, sig_2_idx), shared_hashes));
         }
     }
     cout << "Pairwise comparisons done in " << std::chrono::duration<double, std::milli>(Time::now() - begin_time).count() / 1000 << " secs" << endl;
@@ -168,8 +182,12 @@ int main(int argc, char** argv) {
 
     std::ofstream myfile;
     myfile.open(output + ".csv");
-    myfile << "sig_1" << ',' << "sig_2" << ',' << "max_containment" << '\n';
-    for (const auto& edge : pairwise_hashtable)
-        myfile << sig_names[edge.first.first] << ',' << sig_names[edge.first.second] << ',' << edge.second << '\n';
+    myfile << "sig_1" << ',' << "sig_2" << ',' << "shared_kmers" << ',' << "max_containment" << '\n';
+    for (const auto& edge : pairwise_hashtable) {
+        auto sig_1_size = sig_to_hashes[sig_names[edge.first.first]].size();
+        auto sig_2_size = sig_to_hashes[sig_names[edge.first.second]].size();
+        float max_containment = (float)edge.second / std::min(sig_1_size, sig_2_size);
+        myfile << sig_names[edge.first.first] << ',' << sig_names[edge.first.second] << ',' << edge.second << ',' << max_containment << '\n';
+    }
     myfile.close();
 }
