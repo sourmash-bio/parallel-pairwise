@@ -28,6 +28,9 @@ include_directories("${PHMAP_INCLUDE_DIRS}")
 add_executable(pairwise main.cpp)
 target_link_libraries(pairwise z)
 
+add_executable(pairwise_bins pairwise_bins.cpp)
+target_link_libraries(pairwise_bins z)
+
 add_executable(sigs_to_phmap sigs_to_phmap.cpp)
 target_link_libraries(sigs_to_phmap z)
 
