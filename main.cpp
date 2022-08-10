@@ -32,7 +32,8 @@ using SIGS_MAP = parallel_flat_hash_map<std::string, phmap::flat_hash_set<uint64
     phmap::priv::hash_default_hash<std::string>,
     phmap::priv::hash_default_eq<std::string>,
     std::allocator<std::pair<const std::string, phmap::flat_hash_set<uint64_t>>>,
-    12
+    1,
+    std::mutex
 >;
 
 using PAIRWISE_MAP = parallel_flat_hash_map<std::pair<uint32_t, uint32_t>,
@@ -107,7 +108,7 @@ int main(int argc, char** argv) {
     // 2. Load all sigs in parallel
     cout << "Loading signatures using " << loading_cores << " cores..." << endl;
 
-    SIGS_MAP sig_to_hashes;
+    auto* sig_to_hashes = new SIGS_MAP();
     auto begin_time = Time::now();
     int sigIdx = 0;
     int N = sigs_paths.size();
@@ -123,11 +124,12 @@ int main(int argc, char** argv) {
         for (int l = 0; l < sigs_paths.size(); l++) {
             auto& sig_path = sigs_paths[l];
             ++sigIdx;
-            cout << "\r" << "loading " << sigIdx << "/" << N;
+            // cout << "\r" << "loading " << sigIdx << "/" << N;
             flat_hash_set<uint64_t> tmp_hashes;
             zstr::ifstream sig_stream(sig_path);
             json::value json = json::parse(sig_stream);
             auto sourmash_sig = json[0]["signatures"];
+            auto sig_name = sig_names[l];
             const json::array& sig_array = as_array(sourmash_sig);
             for (auto it = sig_array.begin(); it != sig_array.end(); ++it) {
                 const json::value& v = *it;
@@ -141,9 +143,14 @@ int main(int argc, char** argv) {
                 }
                 break;
             }
-            sig_to_hashes.insert(pair(sig_names[sigIdx], tmp_hashes));
+
+            sig_to_hashes->try_emplace_l(sig_name,
+                [](SIGS_MAP::value_type& v) {},
+                tmp_hashes
+                );
+
 #pragma omp critical
-            bar.update();
+                bar.update();
         }
     }
 
@@ -170,8 +177,8 @@ int main(int argc, char** argv) {
             auto const& seq_pair = combo.combs[vec_i_1];
             uint32_t sig_1_idx = seq_pair.first;
             uint32_t sig_2_idx = seq_pair.second;
-            auto& sig1_hashes = sig_to_hashes[sig_names[sig_1_idx]];
-            auto& sig2_hashes = sig_to_hashes[sig_names[sig_2_idx]];
+            auto& sig1_hashes = sig_to_hashes->operator[](sig_names[sig_1_idx]);
+            auto& sig2_hashes = sig_to_hashes->operator[](sig_names[sig_2_idx]);
             uint64_t shared_hashes = count_if(sig1_hashes.begin(), sig1_hashes.end(), [&](uint64_t k) {return sig2_hashes.find(k) != sig2_hashes.end();});
             if (!shared_hashes) continue;
             pairwise_hashtable.insert(pair(pair(sig_1_idx, sig_2_idx), shared_hashes));
@@ -184,8 +191,8 @@ int main(int argc, char** argv) {
     myfile.open(output + ".csv");
     myfile << "sig_1" << ',' << "sig_2" << ',' << "shared_kmers" << ',' << "max_containment" << '\n';
     for (const auto& edge : pairwise_hashtable) {
-        auto sig_1_size = sig_to_hashes[sig_names[edge.first.first]].size();
-        auto sig_2_size = sig_to_hashes[sig_names[edge.first.second]].size();
+        auto sig_1_size = sig_to_hashes->operator[](sig_names[edge.first.first]).size();
+        auto sig_2_size = sig_to_hashes->operator[](sig_names[edge.first.second]).size();
         float max_containment = (float)edge.second / std::min(sig_1_size, sig_2_size);
         myfile << sig_names[edge.first.first] << ',' << sig_names[edge.first.second] << ',' << edge.second << ',' << max_containment << '\n';
     }
