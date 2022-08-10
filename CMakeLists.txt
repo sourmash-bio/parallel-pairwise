@@ -31,8 +31,8 @@ target_link_libraries(pairwise z)
 add_executable(sigs_to_phmap sigs_to_phmap.cpp)
 target_link_libraries(sigs_to_phmap z)
 
-add_executable(sig_to_bin sig_to_bin.cpp)
-target_link_libraries(sig_to_bin z)
+# add_executable(sig_to_bin sig_to_bin.cpp)
+# target_link_libraries(sig_to_bin z)
 
-add_executable(validate validate.cpp)
-target_link_libraries(validate z)
+# add_executable(validate validate.cpp)
+# target_link_libraries(validate z)
