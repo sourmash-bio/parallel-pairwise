@@ -41,6 +41,23 @@ using PAIRWISE_MAP = parallel_flat_hash_map<std::pair<uint32_t, uint32_t>,
     std::allocator<std::pair<const std::pair<uint32_t, uint32_t>, float>>,
     12, std::mutex>;
 
+template < class T >
+inline std::string Format( T number )
+{
+    std::stringstream ss;
+    ss << number;
+    const std::string num = ss.str();
+    std::string result;
+    const size_t size = num.size();
+    for ( size_t i = 0; i < size; ++i )
+    {
+        if ( i % 3 == 0 && i != 0  )
+            result = ',' + result;
+        result = ( num[ size - 1 - i ] + result );
+    }
+    return result;
+}
+
 
 std::vector<std::string> glob2(const std::string& pattern) {
     using namespace std;
@@ -104,7 +121,7 @@ int main(int argc, char** argv) {
     }
 
     // 2. Load all bins in parallel
-    cout << "Loading binnatures using " << loading_cores << " cores..." << endl;
+    cout << "Loading bins using " << loading_cores << " cores..." << endl;
 
     auto* bin_to_hashes = new BINS_MAP();
     auto begin_time = Time::now();
@@ -146,7 +163,7 @@ int main(int argc, char** argv) {
     begin_time = Time::now();
     int thread_num_1, num_threads_1, start_1, end_1, vec_i_1;
     int n_1 = combo.combs.size();
-    cout << "Performing " << n_1 * n_1 << " pairwise comparisons using " << threads << " cores ..." << endl;
+    cout << "Performing " << Format(n_1 * n_1) << " pairwise comparisons using " << threads << " cores ..." << endl;
     omp_set_num_threads(threads);
 
 #pragma omp parallel private(vec_i_1,thread_num_1,num_threads_1,start_1,end_1)
